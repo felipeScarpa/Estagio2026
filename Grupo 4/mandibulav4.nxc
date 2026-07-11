@@ -1,0 +1,200 @@
+#define motorDireita  OUT_A              // Motor Direito --> entrada A
+#define motorArma     OUT_B              // Possível motor de Arma --> entrada B
+#define motorEsquerda OUT_C              // Motor Esquerdo --> entrada C
+
+#define distancia_sensor1 SensorUS(IN_1)  // Sensor Ultrassônico --> entrada 1
+#define distancia_sensor2 SensorUS(IN_2)
+#define distancia_busca 35
+
+#define angulo_rampa 90
+#define potencia_rampa 50
+
+#define estrategia_frente        1
+#define estrategia_esquerda      2
+#define estrategia_direita       3
+
+int estrategia = estrategia_frente;
+
+void atacar();
+void desarme();
+void baixarRampa();
+void levantarRampa();
+void movimentoInicial();
+void selecionarEstrategia();
+
+task main(){
+
+    SetSensorLowspeed(IN_1);            // NÃO MEXER SUJEITO À >>>PROBLEMAS<<<
+    SetSensorLowspeed(IN_2);
+
+    selecionarEstrategia();
+
+    Wait(5000);                         // Tempo de espera previsto nas regras
+
+    desarme();
+    movimentoInicial();
+
+    while(true)
+    {
+        if(distancia_sensor1 < distancia_busca || distancia_sensor2 < distancia_busca)
+        {
+           atacar();                     //Caso localize um objeto, ataca
+        }
+
+        else
+        {                               // Caso não localize um objeto, girar para um lado (nesse caso, Esquerda)
+           OnFwd(motorDireita,50);
+           OnFwd(motorEsquerda,-50);    // Necessario testar a potência para curvas mais rápidas ou mais lentas
+        }
+    }
+}
+
+void selecionarEstrategia()
+{
+     while(true)
+     {
+           ClearScreen();
+           TextOut(0, 56, "Escolha:");
+           
+           switch(estrategia)
+           {
+                 case estrategia_frente:
+                      TextOut(0,40,"1 - Frente");
+                      break;
+
+                 case estrategia_esquerda:
+                      TextOut(0,40,"2 - Esq");
+                      break;
+
+                 case estrategia_direita:
+                      TextOut(0,40,"3 - Dir");
+                      break;
+           }
+
+           TextOut(0,8,"<-  OK  ->");
+           
+           if(ButtonPressed(BTNNEXT,false))
+           {
+                 estrategia++;
+
+                 if(estrategia > 3)
+                    estrategia = 1;
+
+                 Wait(300);
+           }
+           
+           if(ButtonPressed(BTNPREV,false))
+           {
+                 estrategia--;
+
+                 if(estrategia < 1)
+                    estrategia = 3;
+
+                 Wait(300);
+           }
+           
+           if(ButtonPressed(BTNCENTER,false))
+           {
+                 Wait(300);
+                 break;
+           }
+     }
+     
+     ClearScreen();
+}
+
+void desarme() //A rampa começa levantada e abaixa completamente
+{
+     OnFwd(motorArma,potencia_rampa);  // Necessário testar a direção e a potencia do desarme.
+     Wait(1000);
+     
+     Off(motorArma);
+     
+     ResetRotationCount(motorArma);  //Reseta o contador angular do motor da arma
+     Wait(1);
+}
+
+void baixarRampa()
+{
+     
+     OnFwd(motorArma,potencia_rampa);
+
+     while(MotorRotationCount(motorArma) > 0)            //Enquanto o motor não estiver no mesmo estado do desarme,
+                                                         ele continua se forçando pra baixo.
+     {
+           OnFwd(motorArma,potencia_rampa);
+     }
+
+     Off(motorArma);
+}
+
+void levantarRampa()
+{
+
+     OnFwd(motorArma,-potencia_rampa);                       // Necessário testar a direção e a potencia para
+                                                             levantar a rampa. Deve ser diferente do desarme?
+     while(MotorRotationCount(motorArma) < angulo_rampa)     //Enquanto o motor não estiver em 90º, ele se força
+                                                             pra cima
+     {
+           OnFwd(motorArma,-potencia_rampa);
+     }
+
+     Off(motorArma);
+}
+
+void atacar()
+{
+     long giroDireita;
+     long giroEsquerda;
+
+     ResetRotationCount(motorDireita);
+     ResetRotationCount(motorEsquerda);
+     Wait(1);
+
+     //Avaça com tudo
+     OnFwd(motorDireita,100);
+     OnFwd(motorEsquerda,100);
+
+     Wait(200);
+
+     giroDireita = MotorRotationCount(motorDireita);
+     giroEsquerda = MotorRotationCount(motorEsquerda);
+
+     if(giroDireita < 15 && giroEsquerda < 15) //necessario testar se 15º deve ser o suficiente para ativar a função
+    {
+        levantarRampa();
+
+        Wait(500);
+
+        baixarRampa();
+    }
+}
+
+void movimentoInicial()
+{
+     //necessário testar e ajustar potencia dos motores e tempo de execucao para cada estratégia
+
+     switch(estrategia)
+     {
+           case estrategia_frente:     // Vai começar andando para frente por 1 segundo, esperamos que fique mais próximo do centro da arena
+                 OnFwd(motorDireita,50);
+                 OnFwd(motorEsquerda,50);
+                 Wait(1000);
+                 Off(motorDireita + motorEsquerda);
+                 break;
+
+           case estrategia_esquerda:    //diagonal esquerda
+                 OnFwd(motorDireita,100);
+                 OnFwd(motorEsquerda,50);
+                 Wait(1000);
+                 Off(motorDireita + motorEsquerda);
+                 break;
+                 
+           case estrategia_direita:    //diagoal direita
+                 OnFwd(motorDireita,50);
+                 OnFwd(motorEsquerda,100);
+                 Wait(1000);
+                 Off(motorDireita + motorEsquerda);
+                 break;
+     }
+}
