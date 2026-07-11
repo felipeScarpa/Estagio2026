@@ -1,0 +1,228 @@
+//==============================================================================
+//===| TAMANDUTECH EQUIPE DE ROBÓTICA  |========================================
+//===|          ESTÁGIO 2024           |========================================
+//===|       CÓDIGO DE EXEMPLO         |========================================
+//==============================================================================
+
+/* Este código funciona de maneira que o robô possa se movimentar através dos motores A e C
+Gire no próprio eixo para a esquerda com 50% da potência até que identifique um adversário a menos de 35cm.
+Uma vez identificado, o robô andará para frente em velocidade máxima até que a luta acabe ou ele perca o adversário de vista.
+
+O intuito do desafio é adaptar o código ao robô de vocês, adicionar movimentação inicial na função pré definida e realizar ajustes
+na velocidade dos motores conforme forem necessários
+
+Os comandos básicos são:
+
+OnFwd(MOTOR, POTENCIA (0 a 100));
+delay(milisegundos);
+
+Laços são os comuns de C, while, for, do while, until.
+
+Condicionais if, else if, else, switch case.
+
+Para outras funções, tasks, structures ou condicionamentos especiais, procurar ajuda na staff do estágio */
+
+//==============================================================================
+//==============================================================================
+//==============================================================================
+
+/* Ordem de montagem:
+
+Motor da Direita na porta A
+Motor da Arma ou desarme na porta B
+Motor da Esquerda na porta C
+Sensor na porta 1
+Qualquer outra condição ou ideia, buscar apoio dos membros da equipe para configuração
+*/
+
+//==============================================================================
+//==============================================================================
+//==============================================================================
+
+//__________NÃO MEXER SEM APOIO DA STAFF_______________________________________
+#define motorDireita OUT_A      // Motor Direito --> entrada A
+#define motorArma OUT_B         // Possível motor de Arma --> entrada B
+#define motorEsquerda OUT_C     // Motor Esquerdo --> entrada C
+#define distancia_sensorE SensorUS(IN_1)// Sensor Ultrassônico Esquerdo --> entrada 1
+#define distancia_sensorD SensorUS(IN_2)// Sensor Ultrassônico Direito --> entrada 2
+void arma(int pwr, int time);
+void pwrMotor(int pwrE, int pwrD);
+int max(int a, int b);
+task ataque();
+int selecionarEstrategia();
+void estrategia1();
+void estrategia2();
+void estrategia3();
+
+
+
+
+//__________MEXER PARA REGULAR A DISTANCIA DE BUSCA____________________________________
+#define distancia_busca 35      // Limiar para o robô começar a andar para frente, em centímetros
+#define distancia_ataque 15     // Distancia para robo tentar levantar com a rampa o outro
+#define tempo_rampa 600 // Tempo para a rampa subir ou descer totalmente em relacao a carcaca do robo
+#define tolerancia_ataque 3 // diferenca maxima de distancia dos sensores para nao realizar curvas
+#define NUM_ESTRATEGIAS 3
+#define potenciaRampa 100
+
+
+
+
+
+
+//==============================================================================
+//=========================CORPO DO CÓDIGO======================================
+//==============================================================================
+
+bool rampa_levantada = false; // o robo comeca com a rampa levantada, mas logo no comeco desce ela, entao o estado inicial é abaixada (false)
+bool atacando = true; // quando o robo encontra o outro, a lampa faz o movimento de levantar e abaixar repetidamente
+                       // essa variavel certifica que a rampa terminou seu movimento de levantar/abaixar, para comecar outro
+
+task main(){
+
+    SetSensorLowspeed(IN_1);            // NÃO MEXER SUJEITO À >>>PROBLEMAS<<<
+    SetSensorLowspeed(IN_2);
+
+    int estrategia = selecionarEstrategia();
+    
+    Wait(4500);                         // Tempo de espera previsto nas regras
+    
+    arma(potenciaRampa, tempo_rampa);
+    
+    atacando = true;
+    
+    switch(estrategia)
+    {
+         case 0: estrategia1(); break;
+         case 1: estrategia2(); break;
+         case 2: estrategia3(); break;
+    }
+
+
+    while(true){                        //Rodar para sempre
+        if(distancia_sensorE < distancia_busca || distancia_sensorD < distancia_busca){
+        
+                             // Quanto maior a diferenca de distancia dos sensores, mais rapido o robo ira rotacionar
+                             int dif_distancia = abs(distancia_sensorE - distancia_sensorD);
+        
+                             if(distancia_sensorE < distancia_sensorD - tolerancia_ataque)
+                             {
+                              pwrMotor(max(100 - 3*dif_distancia, 50), 100);
+                             }
+                             else if(distancia_sensorD < distancia_sensorE - tolerancia_ataque)
+                             {
+                              pwrMotor(100, max(100 - 3*dif_distancia, 50));
+                             }
+                             else
+                             {
+                              pwrMotor(100, 100);
+                             }
+                             
+                             if(!rampa_levantada && !atacando && (distancia_sensorE < distancia_ataque || distancia_sensorD < distancia_ataque))
+                             { //levantar rampa para ataque
+                              atacando = true;
+                              start ataque;
+                             }
+        }
+
+        else{                           // Caso não localize um objeto, girar para um lado (nesse caso, Esquerda)
+           pwrMotor(-50, 50);
+        }
+        
+        if(rampa_levantada && !atacando)
+        { //abaixar rampa para ataque
+         atacando = true;
+         start ataque;
+        }
+    }
+}
+
+void arma(int pwr, int time)      // Função para a ativação de uma possível arma
+{
+     OnFwd(motorArma, -pwr);      // Se o desarme for para a direção contrária, inverter sinal. Mexer na potência.
+     Wait(time);                 // Se não desarmar completo, aumentar o delay;
+     Off(motorArma);            // Uma vez que as linhas acabarem, o robô irá para a função de movimentoInicial ou voltar para a main.
+}
+
+void pwrMotor(int pwrE, int pwrD)
+{
+     OnFwd(motorEsquerda, pwrE);
+     OnFwd(motorDireita, pwrD);
+}
+
+task ataque()
+{
+     if(!rampa_levantada)
+     {
+      arma(-potenciaRampa, (tempo_rampa*7)/10);
+      rampa_levantada = true;
+     }
+     else
+     {
+      arma(potenciaRampa, (tempo_rampa*7)/10);
+      rampa_levantada = false;
+     }
+
+     atacando = false;
+}
+
+void estrategia1() // Andar retao, CALIBRAR
+{
+     pwrMotor(100, 100);
+     Wait(500);
+}
+
+void estrategia2() // Caso o robo comeca de costas, ele gira e anda reto, PRECISA CALIBRAR O TEMPO DE GIRO
+{
+     pwrMotor(-100, 100);
+     Wait(750);
+     estrategia1();
+}
+
+void estrategia3() //ZIGZAG, CALIBRAR
+{
+  pwrMotor(50, 100);
+  Wait(500);
+  pwrMotor(100, 50);
+  Wait(500);
+}
+
+int selecionarEstrategia()
+{
+     int selecionado = 0;
+     bool confirmado = false;
+
+     while(!confirmado)
+     {
+          ClearScreen();
+          TextOut(0, LCD_LINE1, "Selecione a");
+          TextOut(0, LCD_LINE2, "estrategia:");
+          NumOut(0, LCD_LINE4, selecionado + 1);
+
+          if(ButtonPressed(BTNRIGHT, true))
+          {
+               selecionado = (selecionado + 1) % NUM_ESTRATEGIAS;
+          }
+          else if(ButtonPressed(BTNLEFT, true))
+          {
+               selecionado = (selecionado - 1 + NUM_ESTRATEGIAS) % NUM_ESTRATEGIAS;
+          }
+          else if(ButtonPressed(BTNCENTER, true))
+          {
+               TextOut(0, LCD_LINE1, "Selecione a");
+               TextOut(0, LCD_LINE2, "estrategia:");
+               TextOut(0, LCD_LINE4, "SELECIONADO");
+               
+               confirmado = true;
+          }
+
+          Wait(200);
+     }
+
+     return selecionado;
+}
+
+int max(int a, int b){
+    if(a > b) return a;
+    else return b;
+}
